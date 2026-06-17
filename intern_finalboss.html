@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Track Inspection Portal</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght=300;400;600&display=swap');
+        
+        :root { --bg-color: #020502; --card-bg: #051005; --text-main: #00ff00; }
+        * { box-sizing: border-box; font-family: 'Poppins', sans-serif; margin: 0; padding: 0; }
+        
+        body { background: linear-gradient(135deg, #0a2f0d 0%, #020502 100%); color: #ffffff; min-height: 100vh; overflow-x: hidden; }
+        
+        .menu-btn {
+            position: fixed; top: 20px; left: 20px; font-size: 24px; color: var(--text-main); 
+            cursor: pointer; z-index: 100; background: rgba(0,0,0,0.8); padding: 8px 16px; 
+            border-radius: 4px; border: 1px solid var(--text-main); font-weight: bold;
+        }
+        .sidebar {
+            position: fixed; top: 0; left: -320px; width: 320px; height: 100%; background: #041204;
+            box-shadow: 5px 0 25px rgba(0,0,0,0.9); transition: all 0.3s ease; z-index: 99; padding-top: 90px;
+            border-right: 2px solid var(--text-main);
+        }
+        .sidebar.active { left: 0; }
+        .sidebar h2 { text-align: center; font-size: 20px; color: var(--text-main); margin-bottom: 20px; letter-spacing: 1px; }
+        .sidebar a { display: block; padding: 16px 30px; color: #a5d6a7; text-decoration: none; font-size: 16px; cursor: pointer; transition: 0.2s; font-weight: 600;}
+        .sidebar a:hover { background: #1b5e20; color: white; border-left: 5px solid var(--text-main); }
+        
+        .header-title { text-align: center; margin: 25px 0; font-size: 34px; color: var(--text-main); font-weight: 600; text-shadow: 0 0 12px rgba(0,255,0,0.5); }
+
+        .container { max-width: 1100px; margin: 40px auto; padding: 30px; background: var(--card-bg); border-radius: 12px; border: 1px solid #005500; display: none; box-shadow: 0 12px 35px rgba(0,0,0,0.7); }
+        .container.active-view { display: block; }
+
+        label { display: block; margin-top: 15px; font-size: 14px; color: #88ff88; font-weight: 600; }
+        select, input {
+            padding: 12px; margin-top: 8px; background: #000; color: var(--text-main);
+            border: 1px solid #006600; outline: none; border-radius: 4px; font-size: 16px;
+        }
+        .full-w { width: 100%; }
+        
+        .btn-action {
+            background: #006600; color: white; border: 1px solid var(--text-main); padding: 14px 20px; font-size: 16px;
+            cursor: pointer; border-radius: 4px; margin-top: 25px; width: 100%; font-weight: bold; transition: 0.2s;
+        }
+        .btn-action:hover { background: var(--text-main); color: #000; }
+
+        .controls-row { display: flex; gap: 15px; margin-bottom: 20px; align-items: center; flex-wrap: wrap;}
+        .control-btn { background: #001a00; color: var(--text-main); border: 1px solid #00ff00; padding: 12px 24px; font-weight: bold; border-radius: 4px; cursor: pointer;}
+        .control-btn:hover { background: #004400; }
+        
+        .channel-toggles { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px;}
+        .ch-btn {
+            padding: 8px 16px; border: 1px solid #333; background: #111; color: #888;
+            cursor: pointer; font-weight: bold; border-radius: 4px;
+        }
+        .ch-btn.active-ch { color: #000 !important; font-weight: 900; }
+
+        .oscilloscope-box {
+            background: #000400; border: 2px solid var(--text-main); height: 480px; border-radius: 8px;
+            position: relative; box-shadow: inset 0 0 25px rgba(0, 255, 0, 0.2); padding: 15px; margin-bottom: 20px;
+        }
+        
+        #map-view { display: none; height: 480px; border: 2px solid #0055ff; border-radius: 8px; margin-top: 20px; }
+        .contact-row { display: flex; gap: 10px; margin-top: 12px; align-items: center; }
+    </style>
+</head>
+<body>
+
+    <div class="menu-btn" onclick="toggleSidebar()">☰</div>
+
+    <div class="sidebar" id="sidebar">
+        <h2>CONTROL OPTIONS</h2>
+        <a onclick="navigateTo('home')">🏠 Home Base</a>
+        <a onclick="navigateTo('sync')">⚙️ Sync Contacts</a>
+        <a onclick="navigateTo('data')">📈 Live Oscilloscope</a>
+    </div>
+
+    <h1 class="header-title">LIVE TRACK INSPECTION PORTAL</h1>
+
+    <div id="home" class="container active-view">
+        <div style="text-align: center; padding: 40px 0;">
+            <h2 style="color: var(--text-main);">Dashboard Core Active</h2>
+            <p style="margin-top: 15px; color: #88af88;">Use the sidebar to Sync Contacts or monitor Live A-Scan Waveforms.</p>
+        </div>
+    </div>
+
+    <div id="sync" class="container">
+        <h3>⚙️ Sync Caretaker Contacts</h3>
+        <label>Select Target Device:</label>
+        <select id="syncMachineId" class="full-w">
+            <option value="DEVICE_1">DEVICE_1 (Primary Engine)</option>
+            <option value="DEVICE_2">DEVICE_2 (Secondary Engine)</option>
+        </select>
+        
+        <label>How many contact lines?</label>
+        <input type="number" id="contactCount" class="full-w" min="1" max="5" value="3">
+        
+        <button class="btn-action" onclick="generateContactFields()">Generate Input Boxes</button>
+        <div id="contactFieldsContainer" style="margin-top: 15px;"></div>
+        <button id="saveContactsBtn" class="btn-action" style="display:none; background:#0044cc; border-color:#00ffff;" onclick="saveContactsToFirebaseCloud()">Sync to Cloud</button>
+    </div>
+
+    <div id="data" class="container">
+        <div id="dataSelectorForm">
+            <h3>Monitoring Setup</h3>
+            <label>Machine ID:</label>
+            <select id="dataMachineId" class="full-w">
+                <option value="DEVICE_1">DEVICE_1</option>
+                <option value="DEVICE_2">DEVICE_2</option>
+            </select>
+
+            <label>Select Folder hierarchy:</label>
+            <select id="dataFolderId" class="full-w">
+                <option value="F_001">F_001</option>
+                <option value="F_002">F_002</option>
+            </select>
+
+            <button class="btn-action" onclick="startLiveReview()">Establish Telemetry Link</button>
+        </div>
+
+        <div id="liveReviewDashboard" style="display: none;">
+            <div style="margin-bottom: 15px; padding: 12px; background: #001a00; border-radius: 4px; border: 1px solid #005500; display: flex; gap: 20px; align-items: center; flex-wrap: wrap;">
+                <div>
+                    <span style="color: #88ff88; font-weight: bold; margin-right: 5px;">Linked Node:</span> 
+                    <select id="liveMachineId" onchange="updateLiveConfig()" style="padding: 6px; background: #000; color: var(--text-main); border: 1px solid #006600; border-radius: 4px; font-size: 14px; width: auto; margin-top: 0; display: inline-block;">
+                        <option value="DEVICE_1">DEVICE_1</option>
+                        <option value="DEVICE_2">DEVICE_2</option>
+                    </select>
+                </div>
+                <div>
+                    <span style="color: #88ff88; font-weight: bold; margin-right: 5px;">Folder Location:</span> 
+                    <select id="liveFolderId" onchange="updateLiveConfig()" style="padding: 6px; background: #000; color: var(--text-main); border: 1px solid #006600; border-radius: 4px; font-size: 14px; width: auto; margin-top: 0; display: inline-block;">
+                        <option value="F_001">F_001</option>
+                        <option value="F_002">F_002</option>
+                    </select>
+                </div>
+                <button class="control-btn" onclick="exitLiveReview()" style="padding: 6px 14px; font-size: 13px; margin-left: auto; background: #200; border-color: #f33; color: #f33;">❌ Disconnect</button>
+            </div>
+
+            <div class="controls-row">
+                <button class="control-btn" id="playBtn">▶️ PLAY STREAM</button>
+                <button class="control-btn" id="speedBtn">Speed: 1x</button>
+                <button class="control-btn" id="mapToggleBtn" style="color:#3399ff; border-color:#3399ff; margin-left: auto;">🗺️ SHOW IN MAPS</button>
+            </div>
+
+            <div class="channel-toggles" id="channelToggles"></div>
+
+            <div class="oscilloscope-box" id="chartContainer">
+                <canvas id="oscChart"></canvas>
+            </div>
+            <div id="map-view"></div>
+        </div>
+    </div>
+
+    <script>
+        let firebaseStorageBucket = "ultrasonic-final-demo.firebasestorage.app";
+        let mapInstance = null; let mapMarker = null; let isMapVisible = false;
+
+        function toggleSidebar() { document.getElementById("sidebar").classList.toggle("active"); }
+        
+        function navigateTo(viewId) {
+            document.getElementById("sidebar").classList.remove("active");
+            document.querySelectorAll('.container').forEach(c => c.classList.remove('active-view'));
+            document.getElementById(viewId).classList.add('active-view');
+        }
+
+        const countryCodes = `
+            <option value="+91">+91 (IND)</option>
+            <option value="+1">+1 (US/CA)</option>
+            <option value="+44">+44 (UK)</option>
+            <option value="+61">+61 (AUS)</option>
+        `;
+
+        function generateContactFields() {
+            let count = document.getElementById("contactCount").value;
+            let container = document.getElementById("contactFieldsContainer");
+            container.innerHTML = "";
+            for (let i = 1; i <= count; i++) {
+                container.innerHTML += `
+                    <div class="contact-row">
+                        <input type="text" class="c-name" placeholder="Name ${i}" style="flex:1;">
+                        <select class="c-ccode" style="width: 100px; flex:none;">${countryCodes}</select>
+                        <input type="text" class="c-phone" placeholder="Phone Number (without code) ${i}" style="flex:2;">
+                    </div>`;
+            }
+            document.getElementById("saveContactsBtn").style.display = "block";
+        }
+
+        function saveContactsToFirebaseCloud() {
+            let machineId = document.getElementById("syncMachineId").value;
+            let names = document.querySelectorAll(".c-name");
+            let ccodes = document.querySelectorAll(".c-ccode");
+            let phones = document.querySelectorAll(".c-phone");
+            let contactList = [];
+
+            for(let i=0; i<names.length; i++) {
+                let phoneNum = phones[i].value.replace(/\s+/g, ""); 
+                if(phoneNum !== "") {
+                    let fullNumber = ccodes[i].value + phoneNum;
+                    contactList.push({ name: names[i].value, phone: fullNumber });
+                }
+            }
+
+            let jsonBlob = new Blob([JSON.stringify(contactList)], {type : 'application/json'});
+            let uploadUrl = `https://firebasestorage.googleapis.com/v0/b/${firebaseStorageBucket}/o?name=${machineId}%2Fcontacts.json`;
+
+            fetch(uploadUrl, { method: 'POST', body: jsonBlob })
+            .then(() => alert(`Contacts Sync Success for ${machineId}!`))
+            .catch(() => alert("Cloud Sync Failure."));
+        }
+
+        let chartInstance = null; let isPlaying = false; let playInterval; let currentSpeed = 1;
+        const chColors = ['#00ff00', '#ff0000', '#3399ff', '#ffff00', '#ff00ff', '#00ffff', '#ff9900', '#9933ff', '#ffffff'];
+        let activeChannels = [0, 1, 2, 3, 4, 5, 6, 7, 8]; 
+
+        function startLiveReview() {
+            let selectedDev = document.getElementById('dataMachineId').value;
+            let selectedFolder = document.getElementById('dataFolderId').value;
+            
+            document.getElementById('liveMachineId').value = selectedDev;
+            document.getElementById('liveFolderId').value = selectedFolder;
+
+            document.getElementById('dataSelectorForm').style.display = 'none';
+            document.getElementById('liveReviewDashboard').style.display = 'block';
+            
+            renderChannelButtons();
+            initOscilloscope();
+            initLeafletMap(22.541695, 72.934433); 
+        }
+
+        function updateLiveConfig() {
+            let selectedDev = document.getElementById('liveMachineId').value;
+            let selectedFolder = document.getElementById('liveFolderId').value;
+            
+            document.getElementById('dataMachineId').value = selectedDev;
+            document.getElementById('dataFolderId').value = selectedFolder;
+            
+            console.log(`Live telemetry target updated to: ${selectedDev} -> ${selectedFolder}`);
+            
+            streamLiveArrayData();
+        }
+
+        function exitLiveReview() {
+            if(isPlaying) {
+                document.getElementById('playBtn').click();
+            }
+            document.getElementById('liveReviewDashboard').style.display = 'none';
+            document.getElementById('dataSelectorForm').style.display = 'block';
+        }
+
+        function renderChannelButtons() {
+            let chHtml = `<button class="ch-btn" onclick="showAllChannels()" style="border-color:#fff; color:#fff;">SHOW ALL</button>`;
+            for(let i=0; i<9; i++) {
+                let isAct = activeChannels.includes(i);
+                chHtml += `<button class="ch-btn ${isAct?'active-ch':''}" onclick="isolateChannel(${i})" style="border-color:${chColors[i]}; background:${isAct?chColors[i]:'#111'}; color:${isAct?'#000':'#888'}">CH ${i+1}</button>`;
+            }
+            document.getElementById('channelToggles').innerHTML = chHtml;
+        }
+
+        function isolateChannel(idx) {
+            activeChannels = [idx]; 
+            renderChannelButtons();
+            if(chartInstance) streamLiveArrayData(); 
+        }
+        function showAllChannels() {
+            activeChannels = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+            renderChannelButtons();
+            if(chartInstance) streamLiveArrayData();
+        }
+
+        function initOscilloscope() {
+            if(chartInstance) { chartInstance.destroy(); }
+            const ctx = document.getElementById('oscChart').getContext('2d');
+            let datasets = [];
+            for(let i=0; i<9; i++) {
+                datasets.push({
+                    label: `CH ${i+1}`, data: [], borderColor: chColors[i],
+                    borderWidth: 2, tension: 0.4, pointRadius: 0, fill: false 
+                });
+            }
+            chartInstance = new Chart(ctx, {
+                type: 'line', 
+                data: { datasets: datasets },
+                options: {
+                    responsive: true, maintainAspectRatio: false, animation: false,
+                    scales: {
+                        x: { type: 'linear', min: 0, max: 100, grid: { color: '#002500' }, ticks: { color: '#00ff00'} },
+                        y: { min: 0, max: 100, grid: { color: '#002500' }, ticks: { color: '#00ff00', callback: function(val){return val + "%"} } }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
+            streamLiveArrayData(); 
+        }
+
+        function streamLiveArrayData() {
+            // 👈 NAYA CHECK: Current selected folder fetch karo
+            let currentFolder = document.getElementById('liveFolderId').value;
+
+            chartInstance.data.datasets.forEach((dataset, idx) => {
+                // 👈 NAYA CONDITION: Agar folder F_002 nahi hai tabhi data generate karo
+                if (activeChannels.includes(idx) && currentFolder !== 'F_002') {
+                    let data = [];
+                    let peakX = 20 + (idx * 8) + (Math.random() * 5); 
+                    let rawPeakValue = 100 + Math.random() * 155; 
+                    
+                    for (let x = 0; x <= 100; x += 1) {
+                        let rawY = 5 + Math.random() * 10; 
+                        let distance = Math.abs(x - peakX);
+                        if (distance < 8) {
+                            rawY += rawPeakValue * Math.pow(Math.cos((distance / 8) * (Math.PI / 2)), 2); 
+                        }
+                        
+                        let percentageY = (rawY / 255.0) * 100.0;
+                        data.push({x: x, y: percentageY});
+                    }
+                    dataset.data = data;
+                } else { 
+                    // 👈 Agar F_002 select hua, toh data empty kar do (Waveform blank ho jayegi)
+                    dataset.data = []; 
+                }
+            });
+            chartInstance.update();
+        }
+
+        function initLeafletMap(lat, lng) {
+            if(!mapInstance) {
+                mapInstance = L.map('map-view').setView([lat, lng], 14);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(mapInstance);
+                mapMarker = L.marker([lat, lng]).addTo(mapInstance).bindPopup('<b>Defect Node Pinpointed</b>').openPopup();
+            }
+        }
+
+        document.getElementById('playBtn').onclick = function() {
+            isPlaying = !isPlaying;
+            if(isPlaying) {
+                this.innerHTML = "⏸️ PAUSE STREAM"; this.style.color = "#ff3333"; this.style.borderColor = "#ff3333";
+                playInterval = setInterval(streamLiveArrayData, 800 / currentSpeed);
+            } else {
+                this.innerHTML = "▶️ PLAY STREAM"; this.style.color = "#00ff00"; this.style.borderColor = "#00ff00";
+                clearInterval(playInterval);
+            }
+        };
+
+        document.getElementById('speedBtn').onclick = function() {
+            currentSpeed = currentSpeed >= 3 ? 1 : currentSpeed + 1;
+            this.innerText = `Speed: ${currentSpeed}x`;
+            if(isPlaying) { clearInterval(playInterval); playInterval = setInterval(streamLiveArrayData, 800 / currentSpeed); }
+        };
+
+        document.getElementById('mapToggleBtn').onclick = function() {
+            isMapVisible = !isMapVisible;
+            let mapView = document.getElementById('map-view');
+            if(isMapVisible) {
+                mapView.style.display = "block"; this.innerText = "🗺️ HIDE MAPS";
+                setTimeout(() => { mapInstance.invalidateSize(); }, 200); 
+            } else {
+                mapView.style.display = "none"; this.innerText = "🗺️ SHOW IN MAPS";
+            }
+        };
+    </script>
+</body>
+</html>
